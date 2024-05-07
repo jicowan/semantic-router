@@ -66,7 +66,7 @@ class BedrockEncoder(BaseEncoder):
         if model_id is None:
             model_id = EncoderDefault.BEDROCK.value["embedding_model"]
 
-        super().__init__(modelId=model_id, score_threshold=score_threshold)
+        super().__init__(name=model_id, score_threshold=score_threshold)
 
         self.client = self._initialize_client(aws_access_key_id, aws_secret_access_key, region)
 
@@ -134,21 +134,38 @@ class BedrockEncoder(BaseEncoder):
         """
         if self.client is None:
             raise ValueError("Bedrock client is not initialized.")
+
         responses = []
         for doc in docs:
-            body = json.dumps(
-                {
-                    "inputText": doc,
-                }
-            )
-            try:
+            if self.name == "cohere.embed-english-v3":
+                body = json.dumps(
+                    {
+                        "texts": [doc],
+                        "input_type": "clustering"
+                    }
+                )
+                accept = "*/*"
                 embedding = self.client.invoke_model(body=body,
-                                                     contentType="application/json",
-                                                     accept="application/json",
-                                                     modelId="amazon.titan-embed-text-v1"
-                                                     )
+                                                      contentType="application/json",
+                                                      accept=accept,
+                                                      modelId=self.name
+                                                      )
                 r = json.loads(embedding.get('body').read())
-                responses.append(r.get('embedding'))
-            except Exception as e:
-                raise ValueError(f"Bedrock Platform API call failed. Error: {e}") from e
+                responses.append(r.get('embeddings'))
+            else:
+                body = json.dumps(
+                    {
+                        "inputText": doc,
+                    }
+                )
+                try:
+                    embedding = self.client.invoke_model(body=body,
+                                                         contentType="application/json",
+                                                         accept="application/json",
+                                                         modelId="amazon.titan-embed-text-v1"
+                                                         )
+                    r = json.loads(embedding.get('body').read())
+                    responses.append(r.get('embedding'))
+                except Exception as e:
+                    raise ValueError(f"Bedrock Platform API call failed. Error: {e}") from e
         return responses
