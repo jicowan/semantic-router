@@ -136,11 +136,38 @@ class BedrockEncoder(BaseEncoder):
             raise ValueError("Bedrock client is not initialized.")
 
         responses = []
-        for doc in docs:
-            if self.name == "cohere.embed-english-v3":
+
+        def chunk_strings(strings, max_chunk_size=75):
+            """
+            Breaks up a list of strings into smaller chunks.
+
+            Args:
+                strings (list): A list of strings to be chunked.
+                max_chunk_size (int): The maximum size of each chunk. Default is 75.
+
+            Returns:
+                list: A list of lists, where each inner list contains a chunk of strings.
+            """
+            chunked_strings = []
+            current_chunk = []
+
+            for string in strings:
+                if len(current_chunk) >= max_chunk_size:
+                    chunked_strings.append(current_chunk)
+                    current_chunk = []
+                current_chunk.append(string)
+
+            if current_chunk:
+                chunked_strings.append(current_chunk)
+
+            return chunked_strings
+
+        if self.name == "cohere.embed-english-v3":
+            chunked_docs = chunk_strings(docs)
+            for chunk in chunked_docs:
                 body = json.dumps(
                     {
-                        "texts": [doc],
+                        "texts": chunk,
                         "input_type": "clustering"
                     }
                 )
@@ -151,8 +178,10 @@ class BedrockEncoder(BaseEncoder):
                                                       modelId=self.name
                                                       )
                 r = json.loads(embedding.get('body').read())
-                responses.append(r.get('embeddings'))
-            else:
+                for item in r.get('embeddings'):
+                    responses.append(item)
+        else:
+            for doc in docs:
                 body = json.dumps(
                     {
                         "inputText": doc,
